@@ -3,10 +3,10 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "users | user | grant | window"
+        description: "users | user | grant | window | check | invite | request"
         required: true
         type: choice
-        options: [users, user, grant, window]
+        options: [users, user, grant, window, check, invite, request]
       email:
         description: "Nutzer-Gmail"
         required: false
