@@ -1,0 +1,40 @@
+name: play-access
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "users | assign | grant | pool_add"
+        required: true
+        type: choice
+        options: [users, assign, grant, pool_add]
+      email:
+        description: "Nutzer-Gmail (assign/grant)"
+        required: false
+      app:
+        description: "grant: App-ID oder Paketname; pool_add: App-IDs kommagetrennt"
+        required: false
+concurrency: play-access
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install google-api-python-client google-auth
+      - run: python assign.py "$ACTION" "$EMAIL" "$APP"
+        env:
+          ACTION: ${{ inputs.action }}
+          EMAIL: ${{ inputs.email }}
+          APP: ${{ inputs.app }}
+          DEV_ID: "5200204185935193647"
+          SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
+      - name: pool.json sichern
+        run: |
+          git config user.name "play-bot"
+          git config user.email "play-bot@users.noreply.github.com"
+          git add pool.json 2>/dev/null || true
+          git diff --cached --quiet || (git commit -m "pool update" && git push)
