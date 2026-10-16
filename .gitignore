@@ -1,0 +1,4 @@
+*.json.key
+*service*account*.json
+*iam.gserviceaccount.com*.json
+bamboo-depth-*.json
