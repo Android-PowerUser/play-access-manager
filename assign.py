@@ -24,6 +24,8 @@ PERMS = [
     "CAN_MANAGE_TRACK_USERS", "CAN_MANAGE_PUBLIC_APKS",
     "CAN_REPLY_TO_REVIEWS", "CAN_MANAGE_DEEPLINKS",
 ]
+# "Ruhezustand": die API kann globale Rechte nicht auf leer setzen (500), daher dieses schmale Recht
+SAFE_GLOBAL = ["CAN_CREATE_MANAGED_PLAY_APPS_GLOBAL"]
 # Zum Anlegen einer App noetig (laut Play-Hilfe beide zusammen)
 GLOBAL_CREATE = ["CAN_MANAGE_DRAFT_APPS_GLOBAL", "CAN_VIEW_NON_FINANCIAL_DATA_GLOBAL"]
 
@@ -154,8 +156,8 @@ def cmd_window(email, package, minutes=20):
     """Oeffnet ein kurzes Zeitfenster zum Anlegen der App, vergibt dann App-Rechte
     auf das Paket und entzieht die globalen Rechte wieder (immer, auch bei Timeout)."""
     u = find_user(email)
-    if u.get("developerAccountPermissions"):
-        sys.exit("Nutzer hat bereits globale Rechte - zuerst migrieren")
+    if set(u.get("developerAccountPermissions", [])) - set(SAFE_GLOBAL):
+        fail("Nutzer hat bereits globale Rechte - zuerst migrieren")
     if app_exists(package):
         fail(f"{package} existiert bereits - keine Rechte vergeben")
     if holders(package):
@@ -174,7 +176,7 @@ def cmd_window(email, package, minutes=20):
                 last = err_text(e)
                 time.sleep(20)
     finally:
-        set_global(email, [])
+        set_global(email, SAFE_GLOBAL)
     if not done:
         print("::error title=window::Timeout, App nicht gefunden. Letzte Antwort: " + last)
         sys.exit(1)
@@ -201,8 +203,8 @@ if __name__ == "__main__":
             set_global(email, [p.strip() for p in app.split(",") if p.strip()])
             print(f"::notice title=setglobal::{email} -> {app}")
         elif action == "strip":
-            set_global(email, [])
-            print(f"::notice title=strip::globale Rechte von {email} entzogen")
+            set_global(email, SAFE_GLOBAL)
+            print(f"::notice title=strip::{email} auf Ruhezustand {SAFE_GLOBAL} gesetzt")
         elif action == "request":
             cmd_request(email, app)
         else:
