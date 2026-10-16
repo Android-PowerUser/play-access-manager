@@ -6,7 +6,7 @@ on:
         description: "users | user | grant | window | check | invite | request"
         required: true
         type: choice
-        options: [users, user, grant, window, check, invite, strip, request]
+        options: [users, user, grant, window, check, invite, strip, setglobal, request]
       email:
         description: "Nutzer-Gmail"
         required: false
