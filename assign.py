@@ -55,8 +55,7 @@ def cmd_users():
 def grant(email, app):
     parent = f"developers/{DEV}/users/{email}"
     body = {"name": f"{parent}/grants/{app}", "appLevelPermissions": PERMS}
-    if "." in app:  # Paketname; App-IDs von Entwuerfen sind rein numerisch
-        body["packageName"] = app
+    body["packageName"] = app  # Paketname bzw. App-ID bei Entwuerfen
     return svc.grants().create(parent=parent, body=body).execute()
 
 
