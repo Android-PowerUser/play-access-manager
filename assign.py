@@ -119,9 +119,8 @@ def cmd_check(package):
 
 
 def cmd_request(email, package):
-    if email.lower() not in {u["email"].lower() for u in all_users()}:
-        invite(email)
-        print(f"::notice title=invite::{email} eingeladen (ohne Rechte)")
+    """Anfrage aus dem Formular: nur fuer bereits eingeladene Nutzer (kein Einladungs-Spam)."""
+    find_user(email)
     if not package:
         print("::notice title=request::kein Paketname angegeben -> keine Rechte vergeben")
         return
