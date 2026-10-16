@@ -111,7 +111,7 @@ def invite(email, perms=None):
     # Die API lehnt Einladungen ganz ohne Rechte ab ("No permissions set")
     return svc.users().create(parent=f"developers/{DEV}",
                               body={"email": email,
-                                    "developerAccountPermissions": perms or GLOBAL_CREATE}).execute()
+                                    "developerAccountPermissions": perms or SAFE_GLOBAL}).execute()
 
 
 def cmd_check(package):
@@ -119,12 +119,46 @@ def cmd_check(package):
 
 
 def cmd_request(email, package):
-    """Anfrage aus dem Formular: nur fuer bereits eingeladene Nutzer (kein Einladungs-Spam)."""
-    find_user(email)
+    """Anfrage aus dem Formular."""
+    if email.lower() not in {u["email"].lower() for u in all_users()}:
+        invite(email, SAFE_GLOBAL)
+        print(f"::notice title=invite::{email} eingeladen (Ruhezustand ohne App-Zugriff)")
+        if package:
+            print("::notice title=request::Einladung annehmen, dann Formular mit Paketname erneut senden")
+        return
     if not package:
         print("::notice title=request::kein Paketname angegeben -> keine Rechte vergeben")
         return
     cmd_window(email, package)
+
+
+def cmd_migrate(apply):
+    """Bestehende Apps: mapping.json (E-Mail -> Pakete) auf App-Rechte umsetzen. Standard: Probelauf."""
+    mp = json.load(open("mapping.json"))
+    users = {u["email"].lower(): u for u in all_users()}
+    lines = []
+    for email, pkgs in mp.items():
+        u = users.get(email.lower())
+        if not u:
+            lines.append(f"{email}: NICHT im Konto")
+            continue
+        for p in pkgs:
+            if not app_exists(p):
+                lines.append(f"{email} -> {p}: App existiert nicht")
+                continue
+            if any(g["name"].endswith("/grants/" + p) for g in u.get("grants", [])):
+                lines.append(f"{email} -> {p}: Recht schon vorhanden")
+                continue
+            if not apply:
+                lines.append(f"{email} -> {p}: wuerde vergeben")
+                continue
+            try:
+                grant(u["email"], p)
+                lines.append(f"{email} -> {p}: VERGEBEN")
+            except HttpError as e:
+                lines.append(f"{email} -> {p}: FEHLER {err_text(e)[:120]}")
+    print("\n".join(lines))
+    print(f"::notice title=migrate {'APPLY' if apply else 'PROBELAUF'}::" + "%0A".join(lines))
 
 
 def cmd_users():
@@ -155,6 +189,8 @@ def cmd_window(email, package, minutes=20):
     """Oeffnet ein kurzes Zeitfenster zum Anlegen der App, vergibt dann App-Rechte
     auf das Paket und entzieht die globalen Rechte wieder (immer, auch bei Timeout)."""
     u = find_user(email)
+    if u.get("accessState") != "ACCESS_GRANTED":
+        fail("Einladung noch nicht angenommen - bitte erst annehmen, dann Formular erneut senden")
     if set(u.get("developerAccountPermissions", [])) - set(SAFE_GLOBAL):
         fail("Nutzer hat bereits globale Rechte - zuerst migrieren")
     if app_exists(package):
@@ -197,7 +233,7 @@ if __name__ == "__main__":
             cmd_check(app)
         elif action == "invite":
             invite(email)
-            print(f"::notice title=invite::{email} eingeladen mit {GLOBAL_CREATE}")
+            print(f"::notice title=invite::{email} eingeladen mit {SAFE_GLOBAL}")
         elif action == "setglobal":
             set_global(email, [p.strip() for p in app.split(",") if p.strip()])
             print(f"::notice title=setglobal::{email} -> {app}")
@@ -206,6 +242,8 @@ if __name__ == "__main__":
             print(f"::notice title=strip::{email} auf Ruhezustand {SAFE_GLOBAL} gesetzt")
         elif action == "request":
             cmd_request(email, app)
+        elif action == "migrate":
+            cmd_migrate(app == "apply")
         else:
             sys.exit("unbekannte Aktion")
     except HttpError as e:
