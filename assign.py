@@ -89,9 +89,11 @@ def holders(package):
             if any(g["name"].endswith("/grants/" + package) for g in u.get("grants", []))]
 
 
-def invite(email):
+def invite(email, perms=None):
+    # Die API lehnt Einladungen ganz ohne Rechte ab ("No permissions set")
     return svc.users().create(parent=f"developers/{DEV}",
-                              body={"email": email, "developerAccountPermissions": []}).execute()
+                              body={"email": email,
+                                    "developerAccountPermissions": perms or GLOBAL_CREATE}).execute()
 
 
 def cmd_check(package):
@@ -178,7 +180,10 @@ if __name__ == "__main__":
             cmd_check(app)
         elif action == "invite":
             invite(email)
-            print(f"::notice title=invite::{email} eingeladen")
+            print(f"::notice title=invite::{email} eingeladen mit {GLOBAL_CREATE}")
+        elif action == "strip":
+            set_global(email, [])
+            print(f"::notice title=strip::globale Rechte von {email} entzogen")
         elif action == "request":
             cmd_request(email, app)
         else:
