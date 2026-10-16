@@ -63,6 +63,51 @@ def set_global(email, perms):
         body={"developerAccountPermissions": perms}).execute()
 
 
+def fail(msg):
+    print("::error title=abgelehnt::" + msg)
+    sys.exit(1)
+
+
+def app_exists(package):
+    """True, wenn die App im Konto existiert (404 = gibt es nicht)."""
+    try:
+        e = svc.edits().insert(packageName=package, body={}).execute()
+    except HttpError as ex:
+        if ex.resp.status == 404:
+            return False
+        raise
+    try:
+        svc.edits().delete(packageName=package, editId=e["id"]).execute()
+    except HttpError:
+        pass
+    return True
+
+
+def holders(package):
+    """Nutzer, die bereits ein App-Recht auf dieses Paket haben."""
+    return [u["email"] for u in all_users()
+            if any(g["name"].endswith("/grants/" + package) for g in u.get("grants", []))]
+
+
+def invite(email):
+    return svc.users().create(parent=f"developers/{DEV}",
+                              body={"email": email, "developerAccountPermissions": []}).execute()
+
+
+def cmd_check(package):
+    print(f"::notice title=check::{package} | existiert={app_exists(package)} | Rechteinhaber={holders(package)}")
+
+
+def cmd_request(email, package):
+    if email.lower() not in {u["email"].lower() for u in all_users()}:
+        invite(email)
+        print(f"::notice title=invite::{email} eingeladen (ohne Rechte)")
+    if not package:
+        print("::notice title=request::kein Paketname angegeben -> keine Rechte vergeben")
+        return
+    cmd_window(email, package)
+
+
 def cmd_users():
     lines = []
     for u in all_users():
@@ -93,6 +138,10 @@ def cmd_window(email, package, minutes=20):
     u = find_user(email)
     if u.get("developerAccountPermissions"):
         sys.exit("Nutzer hat bereits globale Rechte - zuerst migrieren")
+    if app_exists(package):
+        fail(f"{package} existiert bereits - keine Rechte vergeben")
+    if holders(package):
+        fail(f"{package}: es gibt bereits Rechteinhaber - keine Rechte vergeben")
     set_global(email, GLOBAL_CREATE)
     print(f"::notice title=window::Fenster offen fuer {email}, Paket {package}, {minutes} Min.")
     done, last = False, ""
@@ -125,6 +174,13 @@ if __name__ == "__main__":
             cmd_grant(email, app)
         elif action == "window":
             cmd_window(email, app)
+        elif action == "check":
+            cmd_check(app)
+        elif action == "invite":
+            invite(email)
+            print(f"::notice title=invite::{email} eingeladen")
+        elif action == "request":
+            cmd_request(email, app)
         else:
             sys.exit("unbekannte Aktion")
     except HttpError as e:
