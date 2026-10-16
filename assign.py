@@ -37,20 +37,19 @@ def save_pool(p):
 
 
 def all_users():
-    out, token = [], None
-    while True:
-        r = svc.users().list(parent=f"developers/{DEV}", pageToken=token).execute()
-        out += r.get("users", [])
-        token = r.get("nextPageToken")
-        if not token:
-            return out
+    # Die Play-API erlaubt hier keine Seitenaufteilung: pageSize muss -1 sein
+    r = svc.users().list(parent=f"developers/{DEV}", pageSize=-1).execute()
+    return r.get("users", [])
 
 
 def cmd_users():
+    lines = []
     for u in all_users():
         apps = [g["name"].split("/grants/")[-1] for g in u.get("grants", [])]
-        print(u["email"], "|", u.get("accessState"), "|",
-              u.get("developerAccountPermissions", []), "|", apps)
+        lines.append(f'{u["email"]} | {u.get("accessState")} | '
+                     f'{u.get("developerAccountPermissions", [])} | {apps}')
+    print("\n".join(lines))
+    print(f"::notice title=users ({len(lines)})::" + "%0A".join(lines))
 
 
 def grant(email, app):
