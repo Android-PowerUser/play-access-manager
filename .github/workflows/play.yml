@@ -3,10 +3,10 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "users | assign | grant | pool_add"
+        description: "users | user | assign | grant | pool_add"
         required: true
         type: choice
-        options: [users, assign, grant, pool_add]
+        options: [users, user, assign, grant, pool_add]
       email:
         description: "Nutzer-Gmail (assign/grant)"
         required: false
