@@ -1,4 +1,9 @@
 import json, os, sys
+
+def _hook(t, v, tb):
+    msg = (t.__name__ + ": " + str(v)).replace("\r", " ").replace("\n", " ")[:900]
+    print("::error title=assign.py::" + msg)
+sys.excepthook = _hook
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -102,4 +107,4 @@ if __name__ == "__main__":
         else:
             sys.exit("unbekannte Aktion")
     except HttpError as e:
-        sys.exit(f"API-Fehler {e.resp.status}: {e.content.decode()[:800]}")
+        print("::error title=API::" + f"{e.resp.status} " + e.content.decode().replace("\n", " ")[:800]); sys.exit(1)
