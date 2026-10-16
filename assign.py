@@ -52,6 +52,16 @@ def cmd_users():
     print(f"::notice title=users ({len(lines)})::" + "%0A".join(lines))
 
 
+def cmd_user(email):
+    for u in all_users():
+        if u["email"].lower() == email.lower():
+            apps = [g["name"] + " :: " + ",".join(g.get("appLevelPermissions", [])) for g in u.get("grants", [])]
+            print("::notice title=user::" + f'{u["email"]} | {u.get("accessState")} | '
+                  f'{u.get("developerAccountPermissions", [])} | ' + " ;; ".join(apps))
+            return
+    sys.exit("nicht gefunden")
+
+
 def grant(email, app):
     parent = f"developers/{DEV}/users/{email}"
     body = {"name": f"{parent}/grants/{app}", "appLevelPermissions": PERMS}
@@ -96,6 +106,8 @@ if __name__ == "__main__":
     try:
         if action == "users":
             cmd_users()
+        elif action == "user":
+            cmd_user(email)
         elif action == "assign":
             cmd_assign(email)
         elif action == "grant":
