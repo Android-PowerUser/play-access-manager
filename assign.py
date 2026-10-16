@@ -57,10 +57,26 @@ def grant(email, app):
 
 
 def set_global(email, perms):
-    return svc.users().patch(
-        name=f"developers/{DEV}/users/{email}",
-        updateMask="developerAccountPermissions",
-        body={"developerAccountPermissions": perms}).execute()
+    """Globale Rechte setzen. Leere Liste: mehrere Varianten probieren (API macht Probleme)."""
+    name = f"developers/{DEV}/users/{email}"
+    if perms:
+        return svc.users().patch(name=name, updateMask="developerAccountPermissions",
+                                 body={"developerAccountPermissions": perms}).execute()
+    tries = [
+        ("mask+leer", dict(updateMask="developerAccountPermissions",
+                           body={"developerAccountPermissions": []})),
+        ("ohne mask+leer", dict(body={"developerAccountPermissions": []})),
+        ("mask+leerer body", dict(updateMask="developerAccountPermissions", body={})),
+    ]
+    errs = []
+    for label, kw in tries:
+        try:
+            r = svc.users().patch(name=name, **kw).execute()
+            print(f"::notice title=strip-variante::{label} hat funktioniert")
+            return r
+        except HttpError as e:
+            errs.append(label + ": " + err_text(e)[:120])
+    raise RuntimeError("Entziehen fehlgeschlagen: " + " | ".join(errs))
 
 
 def fail(msg):
