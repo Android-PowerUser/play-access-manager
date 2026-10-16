@@ -3,22 +3,22 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "users | user | assign | grant | pool_add"
+        description: "users | user | grant | window"
         required: true
         type: choice
-        options: [users, user, assign, grant, pool_add]
+        options: [users, user, grant, window]
       email:
-        description: "Nutzer-Gmail (assign/grant)"
+        description: "Nutzer-Gmail"
         required: false
       app:
-        description: "grant: App-ID oder Paketname; pool_add: App-IDs kommagetrennt"
+        description: "Paketname der App (grant/window)"
         required: false
-concurrency: play-access
 permissions:
-  contents: write
+  contents: read
 jobs:
   run:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -32,9 +32,3 @@ jobs:
           APP: ${{ inputs.app }}
           DEV_ID: "5200204185935193647"
           SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
-      - name: pool.json sichern
-        run: |
-          git config user.name "play-bot"
-          git config user.email "play-bot@users.noreply.github.com"
-          git add pool.json 2>/dev/null || true
-          git diff --cached --quiet || (git commit -m "pool update" && git push)
