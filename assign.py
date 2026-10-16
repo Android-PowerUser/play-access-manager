@@ -197,6 +197,9 @@ if __name__ == "__main__":
         elif action == "invite":
             invite(email)
             print(f"::notice title=invite::{email} eingeladen mit {GLOBAL_CREATE}")
+        elif action == "setglobal":
+            set_global(email, [p.strip() for p in app.split(",") if p.strip()])
+            print(f"::notice title=setglobal::{email} -> {app}")
         elif action == "strip":
             set_global(email, [])
             print(f"::notice title=strip::globale Rechte von {email} entzogen")
