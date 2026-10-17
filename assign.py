@@ -111,25 +111,50 @@ def invite(email, perms=None):
     # Die API lehnt Einladungen ganz ohne Rechte ab ("No permissions set")
     return svc.users().create(parent=f"developers/{DEV}",
                               body={"email": email,
-                                    "developerAccountPermissions": perms or SAFE_GLOBAL}).execute()
+                                    "developerAccountPermissions": perms or GLOBAL_CREATE}).execute()
 
 
 def cmd_check(package):
     print(f"::notice title=check::{package} | existiert={app_exists(package)} | Rechteinhaber={holders(package)}")
 
 
+PROTECTED = {"io.github.android_poweruser"}  # wird nie ueber das Formular vergeben
+
+
+def cmd_claim(email, package, minutes=30):
+    """Ordnet eine vom Nutzer angelegte App dem Nutzer zu - nur wenn noch niemand Rechte darauf hat.
+    Wartet bis zu 30 Minuten, falls die App beim Absenden noch nicht existiert."""
+    if package in PROTECTED:
+        fail(f"{package} ist geschuetzt")
+    if email.lower() not in {u["email"].lower() for u in all_users()}:
+        invite(email)
+        print(f"::notice title=invite::{email} eingeladen (Anlegen + Ansehen)")
+    deadline = time.time() + minutes * 60
+    while True:
+        if app_exists(package):
+            h = [x.lower() for x in holders(package)]
+            if email.lower() in h:
+                print(f"::notice title=claim::{email} hat {package} schon")
+                return
+            if h:
+                fail(f"{package}: es gibt bereits Rechteinhaber - keine Rechte vergeben")
+            grant(email, package)
+            print(f"::notice title=claim::FERTIG {email} -> {package}")
+            return
+        if time.time() > deadline:
+            fail(f"{package} existiert nach {minutes} Min. nicht")
+        time.sleep(30)
+
+
 def cmd_request(email, package):
     """Anfrage aus dem Formular."""
-    if email.lower() not in {u["email"].lower() for u in all_users()}:
-        invite(email, SAFE_GLOBAL)
-        print(f"::notice title=invite::{email} eingeladen (Ruhezustand ohne App-Zugriff)")
-        if package:
-            print("::notice title=request::Einladung annehmen, dann Formular mit Paketname erneut senden")
-        return
-    if not package:
-        print("::notice title=request::kein Paketname angegeben -> keine Rechte vergeben")
-        return
-    cmd_window(email, package)
+    if package:
+        cmd_claim(email, package)
+    elif email.lower() not in {u["email"].lower() for u in all_users()}:
+        invite(email)
+        print(f"::notice title=invite::{email} eingeladen (Anlegen + Ansehen)")
+    else:
+        print("::notice title=request::kein Paketname -> nichts zu tun")
 
 
 def cmd_migrate(apply):
@@ -229,11 +254,13 @@ if __name__ == "__main__":
             cmd_grant(email, app)
         elif action == "window":
             cmd_window(email, app)
+        elif action == "claim":
+            cmd_claim(email, app)
         elif action == "check":
             cmd_check(app)
         elif action == "invite":
             invite(email)
-            print(f"::notice title=invite::{email} eingeladen mit {SAFE_GLOBAL}")
+            print(f"::notice title=invite::{email} eingeladen mit {GLOBAL_CREATE}")
         elif action == "setglobal":
             set_global(email, [p.strip() for p in app.split(",") if p.strip()])
             print(f"::notice title=setglobal::{email} -> {app}")
