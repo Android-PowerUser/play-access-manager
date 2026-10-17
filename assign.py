@@ -24,8 +24,6 @@ PERMS = [
     "CAN_MANAGE_TRACK_USERS", "CAN_MANAGE_PUBLIC_APKS",
     "CAN_REPLY_TO_REVIEWS", "CAN_MANAGE_DEEPLINKS",
 ]
-# "Ruhezustand": die API kann globale Rechte nicht auf leer setzen (500), daher dieses schmale Recht
-SAFE_GLOBAL = ["CAN_CREATE_MANAGED_PLAY_APPS_GLOBAL"]
 # Zum Anlegen einer App noetig (laut Play-Hilfe beide zusammen)
 GLOBAL_CREATE = ["CAN_MANAGE_DRAFT_APPS_GLOBAL", "CAN_VIEW_NON_FINANCIAL_DATA_GLOBAL"]
 
@@ -121,29 +119,23 @@ def cmd_check(package):
 PROTECTED = {"io.github.android_poweruser"}  # wird nie ueber das Formular vergeben
 
 
-def cmd_claim(email, package, minutes=30):
-    """Ordnet eine vom Nutzer angelegte App dem Nutzer zu - nur wenn noch niemand Rechte darauf hat.
-    Wartet bis zu 30 Minuten, falls die App beim Absenden noch nicht existiert."""
+def cmd_claim(email, package):
+    """Ordnet eine vom Nutzer angelegte App dem Nutzer zu - nur wenn noch niemand Rechte darauf hat."""
     if package in PROTECTED:
         fail(f"{package} ist geschuetzt")
     if email.lower() not in {u["email"].lower() for u in all_users()}:
         invite(email)
         print(f"::notice title=invite::{email} eingeladen (Anlegen + Ansehen)")
-    deadline = time.time() + minutes * 60
-    while True:
-        if app_exists(package):
-            h = [x.lower() for x in holders(package)]
-            if email.lower() in h:
-                print(f"::notice title=claim::{email} hat {package} schon")
-                return
-            if h:
-                fail(f"{package}: es gibt bereits Rechteinhaber - keine Rechte vergeben")
-            grant(email, package)
-            print(f"::notice title=claim::FERTIG {email} -> {package}")
-            return
-        if time.time() > deadline:
-            fail(f"{package} existiert nach {minutes} Min. nicht")
-        time.sleep(30)
+    if not app_exists(package):
+        fail(f"{package} existiert noch nicht - bitte nach dem Anlegen der App erneut senden")
+    h = [x.lower() for x in holders(package)]
+    if email.lower() in h:
+        print(f"::notice title=claim::{email} hat {package} schon")
+        return
+    if h:
+        fail(f"{package}: es gibt bereits Rechteinhaber - keine Rechte vergeben")
+    grant(email, package)
+    print(f"::notice title=claim::FERTIG {email} -> {package}")
 
 
 def cmd_request(email, package):
@@ -186,27 +178,6 @@ def cmd_migrate(apply):
     print(f"::notice title=migrate {'APPLY' if apply else 'PROBELAUF'}::" + "%0A".join(lines))
 
 
-def cmd_globals(apply):
-    """Alle Nutzer dauerhaft mit GLOBAL_CREATE ausstatten (vorhandene globale Rechte bleiben).
-    Standard: Probelauf, mit app=apply wird geschrieben."""
-    lines = []
-    for u in all_users():
-        cur = list(u.get("developerAccountPermissions", []))
-        if all(p in cur for p in GLOBAL_CREATE):
-            lines.append(f'{u["email"]}: schon vorhanden')
-            continue
-        if not apply:
-            lines.append(f'{u["email"]}: wuerde ergaenzen')
-            continue
-        try:
-            set_global(u["email"], sorted(set(cur) | set(GLOBAL_CREATE)))
-            lines.append(f'{u["email"]}: ERGAENZT')
-        except HttpError as e:
-            lines.append(f'{u["email"]}: FEHLER {err_text(e)[:120]}')
-    print("\n".join(lines))
-    print(f"::notice title=globals {'APPLY' if apply else 'PROBELAUF'}::" + "%0A".join(lines))
-
-
 def cmd_users():
     lines = []
     for u in all_users():
@@ -231,39 +202,6 @@ def cmd_grant(email, app):
     print(f"::notice title=grant::OK {email} -> {app}")
 
 
-def cmd_window(email, package, minutes=20):
-    """Oeffnet ein kurzes Zeitfenster zum Anlegen der App, vergibt dann App-Rechte
-    auf das Paket und entzieht die globalen Rechte wieder (immer, auch bei Timeout)."""
-    u = find_user(email)
-    if u.get("accessState") != "ACCESS_GRANTED":
-        fail("Einladung noch nicht angenommen - bitte erst annehmen, dann Formular erneut senden")
-    if set(u.get("developerAccountPermissions", [])) - set(SAFE_GLOBAL):
-        fail("Nutzer hat bereits globale Rechte - zuerst migrieren")
-    if app_exists(package):
-        fail(f"{package} existiert bereits - keine Rechte vergeben")
-    if holders(package):
-        fail(f"{package}: es gibt bereits Rechteinhaber - keine Rechte vergeben")
-    set_global(email, GLOBAL_CREATE)
-    print(f"::notice title=window::Fenster offen fuer {email}, Paket {package}, {minutes} Min.")
-    done, last = False, ""
-    try:
-        deadline = time.time() + minutes * 60
-        while time.time() < deadline:
-            try:
-                grant(email, package)
-                done = True
-                break
-            except HttpError as e:
-                last = err_text(e)
-                time.sleep(20)
-    finally:
-        set_global(email, SAFE_GLOBAL)
-    if not done:
-        print("::error title=window::Timeout, App nicht gefunden. Letzte Antwort: " + last)
-        sys.exit(1)
-    print(f"::notice title=window::FERTIG {email} -> {package}; globale Rechte entzogen")
-
-
 if __name__ == "__main__":
     action, email, app = (sys.argv + ["", "", ""])[1:4]
     try:
@@ -273,8 +211,6 @@ if __name__ == "__main__":
             cmd_user(email)
         elif action == "grant":
             cmd_grant(email, app)
-        elif action == "window":
-            cmd_window(email, app)
         elif action == "claim":
             cmd_claim(email, app)
         elif action == "check":
@@ -285,13 +221,8 @@ if __name__ == "__main__":
         elif action == "setglobal":
             set_global(email, [p.strip() for p in app.split(",") if p.strip()])
             print(f"::notice title=setglobal::{email} -> {app}")
-        elif action == "strip":
-            set_global(email, SAFE_GLOBAL)
-            print(f"::notice title=strip::{email} auf Ruhezustand {SAFE_GLOBAL} gesetzt")
         elif action == "request":
             cmd_request(email, app)
-        elif action == "globals":
-            cmd_globals(app == "apply")
         elif action == "migrate":
             cmd_migrate(app == "apply")
         else:
