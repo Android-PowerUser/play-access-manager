@@ -186,6 +186,27 @@ def cmd_migrate(apply):
     print(f"::notice title=migrate {'APPLY' if apply else 'PROBELAUF'}::" + "%0A".join(lines))
 
 
+def cmd_globals(apply):
+    """Alle Nutzer dauerhaft mit GLOBAL_CREATE ausstatten (vorhandene globale Rechte bleiben).
+    Standard: Probelauf, mit app=apply wird geschrieben."""
+    lines = []
+    for u in all_users():
+        cur = list(u.get("developerAccountPermissions", []))
+        if all(p in cur for p in GLOBAL_CREATE):
+            lines.append(f'{u["email"]}: schon vorhanden')
+            continue
+        if not apply:
+            lines.append(f'{u["email"]}: wuerde ergaenzen')
+            continue
+        try:
+            set_global(u["email"], sorted(set(cur) | set(GLOBAL_CREATE)))
+            lines.append(f'{u["email"]}: ERGAENZT')
+        except HttpError as e:
+            lines.append(f'{u["email"]}: FEHLER {err_text(e)[:120]}')
+    print("\n".join(lines))
+    print(f"::notice title=globals {'APPLY' if apply else 'PROBELAUF'}::" + "%0A".join(lines))
+
+
 def cmd_users():
     lines = []
     for u in all_users():
@@ -269,6 +290,8 @@ if __name__ == "__main__":
             print(f"::notice title=strip::{email} auf Ruhezustand {SAFE_GLOBAL} gesetzt")
         elif action == "request":
             cmd_request(email, app)
+        elif action == "globals":
+            cmd_globals(app == "apply")
         elif action == "migrate":
             cmd_migrate(app == "apply")
         else:

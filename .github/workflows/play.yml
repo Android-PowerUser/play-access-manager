@@ -6,12 +6,12 @@ on:
         description: "users | user | grant | window | check | invite | request"
         required: true
         type: choice
-        options: [users, user, grant, window, check, invite, strip, setglobal, request, claim, migrate]
+        options: [users, user, grant, window, check, invite, strip, setglobal, request, claim, migrate, globals]
       email:
         description: "Nutzer-Gmail"
         required: false
       app:
-        description: "Paketname (grant/window/request) oder bei migrate: apply"
+        description: "Paketname (grant/window/request) oder bei migrate/globals: apply"
         required: false
 permissions:
   contents: read
