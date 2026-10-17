@@ -3,22 +3,22 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "users | user | grant | window | check | invite | request"
+        description: "users | user | grant | check | invite | request | claim | migrate"
         required: true
         type: choice
-        options: [users, user, grant, window, check, invite, strip, setglobal, request, claim, migrate, globals]
+        options: [users, user, grant, check, invite, setglobal, request, claim, migrate]
       email:
         description: "Nutzer-Gmail"
         required: false
       app:
-        description: "Paketname (grant/window/request) oder bei migrate/globals: apply"
+        description: "Paketname (grant/window/request) oder bei migrate: apply"
         required: false
 permissions:
   contents: read
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
