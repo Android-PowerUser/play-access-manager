@@ -1,4 +1,4 @@
-import json, os, sys, time
+import json, os, re, sys, time
 
 def _hook(t, v, tb):
     msg = (t.__name__ + ": " + str(v)).replace("\r", " ").replace("\n", " ")[:900]
@@ -138,11 +138,27 @@ def cmd_claim(email, package):
     print(f"::notice title=claim::FERTIG {email} -> {package}")
 
 
+def valid_email(x):
+    return bool(re.match(r"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$", x))
+
+
+def valid_pkg(x):
+    parts = x.split(".")
+    return len(parts) >= 2 and all(re.match(r"^[A-Za-z][A-Za-z0-9_]*$", p) for p in parts)
+
+
 def cmd_request(email, package):
-    """Anfrage aus dem Formular."""
+    """Anfrage aus dem Formular. Ungueltiger Paketname = nur einladen."""
+    email, package = email.strip().lower(), package.strip()
+    if not valid_email(email):
+        print(f"::notice title=request::ungueltige E-Mail ignoriert: {email[:40]}")
+        return
+    if package and not valid_pkg(package):
+        print(f"::notice title=request::Paketname ungueltig ({package[:40]}) - nur Einladung")
+        package = ""
     if package:
         cmd_claim(email, package)
-    elif email.lower() not in {u["email"].lower() for u in all_users()}:
+    elif email not in {u["email"].lower() for u in all_users()}:
         invite(email)
         print(f"::notice title=invite::{email} eingeladen (Anlegen + Ansehen)")
     else:
