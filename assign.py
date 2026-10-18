@@ -213,6 +213,19 @@ def cmd_normalize(apply):
         print("::notice title=backup::" + json.dumps(backup, separators=(",", ":")))
 
 
+def cmd_emails():
+    """E-Mail-Adressen nach Zugangsstatus (ohne eigene Konten, Testkonten, Dienstkonten)."""
+    skip = SKIP_EMAILS | {"markuswinterfeld95@gmail.com", "electroneum40@gmail.com"}
+    groups = {}
+    for u in all_users():
+        e = u["email"]
+        if e.lower() in skip or e.lower().endswith(".gserviceaccount.com"):
+            continue
+        groups.setdefault(u.get("accessState"), []).append(e)
+    for st, lst in groups.items():
+        print(f"::notice title=emails {st} ({len(lst)})::" + ", ".join(lst))
+
+
 def cmd_users():
     lines = []
     for u in all_users():
@@ -258,6 +271,8 @@ if __name__ == "__main__":
             print(f"::notice title=setglobal::{email} -> {app}")
         elif action == "request":
             cmd_request(email, app)
+        elif action == "emails":
+            cmd_emails()
         elif action == "normalize":
             cmd_normalize(app == "apply")
         elif action == "migrate":
