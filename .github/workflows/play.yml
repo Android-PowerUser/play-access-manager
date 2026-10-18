@@ -6,7 +6,7 @@ on:
         description: "users | user | grant | check | invite | request | claim | migrate"
         required: true
         type: choice
-        options: [users, user, grant, check, invite, setglobal, request, claim, migrate]
+        options: [users, user, grant, check, invite, setglobal, request, claim, migrate, normalize]
       email:
         description: "Nutzer-Gmail"
         required: false
