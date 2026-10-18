@@ -178,6 +178,41 @@ def cmd_migrate(apply):
     print(f"::notice title=migrate {'APPLY' if apply else 'PROBELAUF'}::" + "%0A".join(lines))
 
 
+SKIP_EMAILS = {"matthiasexner98@gmail.com", "tschikruma@gmail.com"}  # deine eigenen Konten
+
+
+def cmd_normalize(apply):
+    """Setzt Nutzer mit breiten Einzelrechten auf die zwei Rechte (Anlegen + Ansehen). Standard: Probelauf."""
+    rows, backup = [], {}
+    for u in all_users():
+        email, perms, state = u["email"], u.get("developerAccountPermissions", []), u.get("accessState")
+        if email.lower() in SKIP_EMAILS or email.lower().endswith(".gserviceaccount.com"):
+            rows.append(f"{email}: uebersprungen (eigenes Konto/Dienstkonto)")
+            continue
+        if "CAN_MANAGE_PERMISSIONS_GLOBAL" in perms:
+            rows.append(f"{email}: uebersprungen (Admin)")
+            continue
+        if not perms or set(perms) == set(GLOBAL_CREATE):
+            continue
+        if state not in ("ACCESS_GRANTED", "INVITED"):
+            rows.append(f"{email}: uebersprungen ({state})")
+            continue
+        n_apps = len(u.get("grants", []))
+        backup[email] = perms
+        status = "wuerde umstellen"
+        if apply:
+            try:
+                set_global(email, GLOBAL_CREATE)
+                status = "UMGESTELLT"
+            except Exception as e:
+                status = "FEHLER " + str(e)[:100].replace("\n", " ")
+        rows.append(f"{email}: {len(perms)} Rechte -> 2, App-Rechte vorhanden: {n_apps} | {state} | {status}")
+    print("\n".join(rows))
+    print(f"::notice title=normalize {'APPLY' if apply else 'PROBELAUF'}::" + "%0A".join(rows))
+    if apply:
+        print("::notice title=backup::" + json.dumps(backup, separators=(",", ":")))
+
+
 def cmd_users():
     lines = []
     for u in all_users():
@@ -223,6 +258,8 @@ if __name__ == "__main__":
             print(f"::notice title=setglobal::{email} -> {app}")
         elif action == "request":
             cmd_request(email, app)
+        elif action == "normalize":
+            cmd_normalize(app == "apply")
         elif action == "migrate":
             cmd_migrate(app == "apply")
         else:
