@@ -1,4 +1,4 @@
-import json, os, re, sys, time
+import json, os, re, smtplib, sys, time
 
 def _hook(t, v, tb):
     msg = (t.__name__ + ": " + str(v)).replace("\r", " ").replace("\n", " ")[:900]
@@ -119,6 +119,37 @@ def cmd_check(package):
 PROTECTED = {"io.github.android_poweruser"}  # wird nie ueber das Formular vergeben
 
 
+FORM_URL = "https://docs.google.com/forms/d/1wQiKmP9R2PTmZQe_1ZAp3KCv9M8_d9nlqoLsLot2M-I/viewform"
+
+
+def send_hint(email, package):
+    """Mail an die Person: App existiert noch nicht. Ohne MAIL_USER/MAIL_PASSWORD wird nichts gesendet."""
+    user, pw = os.environ.get("MAIL_USER", ""), os.environ.get("MAIL_PASSWORD", "")
+    if not user or not pw:
+        print("::notice title=mail::nicht gesendet: MAIL_USER/MAIL_PASSWORD fehlen")
+        return
+    try:
+        from email.message import EmailMessage
+        msg = EmailMessage()
+        msg["Subject"] = "Free Play Console: your app does not exist yet"
+        msg["From"] = user
+        msg["To"] = email
+        msg.set_content(
+            f"Hello,\n\nyou sent the package name {package}, but no app with this package name exists in the Play Console yet.\n\n"
+            "What to do:\n"
+            "1. Accept the Google Play Console invitation email (check your spam folder).\n"
+            "2. In Play Console create your app and upload your first app file.\n"
+            f"3. Check that the package name is exactly {package}. The package name is NOT the app name.\n"
+            f"4. Fill out the form AGAIN with the same Gmail and the package name: {FORM_URL}\n\n"
+            "This email is sent automatically. Replies are not read.\n")
+        with smtplib.SMTP_SSL(os.environ.get("MAIL_HOST", "smtp.gmail.com"), 465, timeout=30) as s:
+            s.login(user, pw)
+            s.send_message(msg)
+        print(f"::notice title=mail::Hinweis an {email} gesendet")
+    except Exception as e:
+        print("::warning title=mail::nicht gesendet: " + str(e)[:200])
+
+
 def cmd_claim(email, package):
     """Ordnet eine vom Nutzer angelegte App dem Nutzer zu - nur wenn noch niemand Rechte darauf hat."""
     if package in PROTECTED:
@@ -127,6 +158,7 @@ def cmd_claim(email, package):
         invite(email)
         print(f"::notice title=invite::{email} eingeladen (Anlegen + Ansehen)")
     if not app_exists(package):
+        send_hint(email, package)
         fail(f"{package} existiert noch nicht - bitte nach dem Anlegen der App erneut senden")
     h = [x.lower() for x in holders(package)]
     if email.lower() in h:
