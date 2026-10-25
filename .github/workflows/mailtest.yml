@@ -1,0 +1,36 @@
+name: mailtest
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: SMTP test
+        env:
+          MAIL_USER: ${{ secrets.MAIL_USER }}
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import os, smtplib, ssl
+          from email.message import EmailMessage
+          for name in ("MAIL_USER","MAIL_USERNAME"):
+              u=os.environ.get(name,"")
+              pw=os.environ.get("MAIL_PASSWORD","")
+              print(name, "gesetzt" if u else "LEER", "| Passwortlaenge:", len(pw))
+              if not u: continue
+              try:
+                  with smtplib.SMTP_SSL("smtp.gmail.com",465,timeout=30) as s:
+                      s.login(u,pw)
+                      m=EmailMessage()
+                      m["From"]=u; m["To"]=u
+                      m["Subject"]=f"play-access-manager Mailtest ({name})"
+                      m.set_content("Test erfolgreich.")
+                      s.send_message(m)
+                  print(name,"=> LOGIN+SENDEN OK")
+              except Exception as e:
+                  print(name,"=> FEHLER:",repr(e)[:300])
+          PY
