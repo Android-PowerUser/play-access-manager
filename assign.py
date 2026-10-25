@@ -136,13 +136,11 @@ def send_hint(email, package):
         msg["From"] = user
         msg["To"] = email
         msg.set_content(
-            f"Hello,\n\nyou sent the package name {package}, but no app with this package name exists in the Play Console yet.\n\n"
-            "What to do:\n"
-            "1. Accept the Google Play Console invitation email (check your spam folder).\n"
-            "2. In Play Console create your app and upload your first app file.\n"
-            f"3. Check that the package name is exactly {package}. The package name is NOT the app name.\n"
-            f"4. Fill out the form AGAIN with the same Gmail and the package name: {FORM_URL}\n\n"
-            "This email is sent automatically. Replies are not read.\n")
+            "Hello,\n\n"
+            f"the package name {package} don't exists in the Play Developer Console.\n\n"
+            "1. Accept the Google Play Console invitation email and create your app.\n"
+            f"2. Copy/paste the package name from the Google Play Developer Console to {FORM_URL}\n\n"
+            "This email is sent automatically. No Reply.\n")
         with smtplib.SMTP_SSL(os.environ.get("MAIL_HOST", "smtp.gmail.com"), 465, timeout=30) as s:
             s.login(user, pw)
             s.send_message(msg)
