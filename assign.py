@@ -123,12 +123,48 @@ PROTECTED = {"io.github.android_poweruser"}  # wird nie ueber das Formular verge
 FORM_URL = "https://docs.google.com/forms/d/1wQiKmP9R2PTmZQe_1ZAp3KCv9M8_d9nlqoLsLot2M-I/viewform"
 
 
+def already_sent(user, pw, email, package, hours=24):
+    """True, wenn in den letzten `hours` Stunden schon eine Hinweis-Mail zu diesem Paket an diese Adresse ging
+    (Pruefung im Gmail-Ordner Gesendet; verhindert Mehrfachmails und damit Spam-Einstufung)."""
+    import imaplib
+    m = imaplib.IMAP4_SSL("imap.gmail.com", timeout=30)
+    try:
+        m.login(user, pw)
+        sent = None
+        _, boxes = m.list()
+        for b in boxes:
+            line = b.decode("utf-8", "replace")
+            if "\\Sent" in line:
+                sent = line.rsplit(' "/" ', 1)[-1].strip()
+                break
+        m.select(sent or '"[Gmail]/Sent Mail"', readonly=True)
+        days = max(1, -(-hours // 24))
+        _, data = m.uid("SEARCH", "X-GM-RAW", f'"to:{email} newer_than:{days}d"')
+        for uid in (data[0] or b"").split():
+            _, msgs = m.uid("FETCH", uid, "(BODY.PEEK[TEXT] BODY.PEEK[HEADER.FIELDS (DATE)])")
+            raw = b" ".join(p[1] for p in msgs if isinstance(p, tuple)).decode("utf-8", "replace")
+            if package in raw:
+                return True
+        return False
+    finally:
+        try:
+            m.logout()
+        except Exception:
+            pass
+
+
 def send_hint(email, package):
     """Mail an die Person: App existiert noch nicht. Ohne MAIL_USER/MAIL_PASSWORD wird nichts gesendet."""
     user, pw = os.environ.get("MAIL_USER", ""), os.environ.get("MAIL_PASSWORD", "")
     if not user or not pw:
         print("::notice title=mail::nicht gesendet: MAIL_USER/MAIL_PASSWORD fehlen")
         return
+    try:
+        if already_sent(user, pw, email, package):
+            print(f"::notice title=mail::nicht erneut gesendet: {email} hat zu {package} in den letzten 24h schon eine Mail bekommen")
+            return
+    except Exception as e:
+        print("::warning title=mail::Duplikatpruefung fehlgeschlagen, sende trotzdem: " + str(e)[:150])
     try:
         from email.message import EmailMessage
         msg = EmailMessage()
