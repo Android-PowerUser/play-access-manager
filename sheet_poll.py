@@ -32,8 +32,16 @@ def main():
     raw = urllib.request.urlopen(URL, timeout=30).read().decode("utf-8")
     rows = list(csv.reader(io.StringIO(raw)))
     head, data = rows[0], rows[1:]
-    ci = next(i for i, h in enumerate(head) if h.lower().startswith("enter your gmail"))
-    cp = next((i for i, h in enumerate(head) if h.lower().startswith("the package name")), None)
+    low = [h.lower() for h in head]
+    # Paketspalte zuerst suchen: ihr Titel enthaelt auch "Gmail" ("... associated with your Gmail Account")
+    cp = next((i for i, h in enumerate(low) if "package name" in h), None)
+    ci = next((i for i, h in enumerate(low) if i != cp and ("gmail" in h or "e-mail" in h or "email" in h)), None)
+    kopf = " | ".join(h[:50] for h in head)
+    if ci is None:
+        print("::error title=sheet::keine E-Mail-Spalte gefunden: " + kopf)
+        sys.exit(1)
+    if cp is None:
+        print("::warning title=sheet::keine Paketname-Spalte gefunden, nur Einladungen moeglich: " + kopf)
     try:
         state = json.load(open(STATE))
     except FileNotFoundError:
