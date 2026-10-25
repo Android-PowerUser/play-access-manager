@@ -123,7 +123,7 @@ PROTECTED = {"io.github.android_poweruser"}  # wird nie ueber das Formular verge
 FORM_URL = "https://docs.google.com/forms/d/1wQiKmP9R2PTmZQe_1ZAp3KCv9M8_d9nlqoLsLot2M-I/viewform"
 
 
-def already_sent(user, pw, email, package, hours=24):
+def already_sent(user, pw, email, package, subject=None, hours=24):
     """True, wenn in den letzten `hours` Stunden schon eine Hinweis-Mail zu diesem Paket an diese Adresse ging
     (Pruefung im Gmail-Ordner Gesendet; verhindert Mehrfachmails und damit Spam-Einstufung)."""
     import imaplib
@@ -141,9 +141,10 @@ def already_sent(user, pw, email, package, hours=24):
         days = max(1, -(-hours // 24))
         _, data = m.uid("SEARCH", "X-GM-RAW", f'"to:{email} newer_than:{days}d"')
         for uid in (data[0] or b"").split():
-            _, msgs = m.uid("FETCH", uid, "(BODY.PEEK[TEXT] BODY.PEEK[HEADER.FIELDS (DATE)])")
+            _, msgs = m.uid("FETCH", uid, "(BODY.PEEK[TEXT] BODY.PEEK[HEADER.FIELDS (SUBJECT)])")
             raw = b" ".join(p[1] for p in msgs if isinstance(p, tuple)).decode("utf-8", "replace")
-            if package in raw:
+            raw = " ".join(raw.split())
+            if package in raw and (subject is None or " ".join(subject.split()) in raw):
                 return True
         return False
     finally:
@@ -153,36 +154,50 @@ def already_sent(user, pw, email, package, hours=24):
             pass
 
 
-def send_hint(email, package):
-    """Mail an die Person: App existiert noch nicht. Ohne MAIL_USER/MAIL_PASSWORD wird nichts gesendet."""
+def _send(email, package, subject, body):
+    """Sendet eine automatische Mail. Gleiche Mail (Empfaenger+Paket+Betreff) wird innerhalb 24h nicht erneut gesendet.
+    Ohne MAIL_USER/MAIL_PASSWORD oder bei Fehlern wird nichts gesendet; der Lauf bricht deswegen nicht ab."""
     user, pw = os.environ.get("MAIL_USER", ""), os.environ.get("MAIL_PASSWORD", "")
     if not user or not pw:
         print("::notice title=mail::nicht gesendet: MAIL_USER/MAIL_PASSWORD fehlen")
         return
     try:
-        if already_sent(user, pw, email, package):
-            print(f"::notice title=mail::nicht erneut gesendet: {email} hat zu {package} in den letzten 24h schon eine Mail bekommen")
+        if already_sent(user, pw, email, package, subject):
+            print(f"::notice title=mail::nicht erneut gesendet: {email} hat zu {package} in den letzten 24h schon diese Mail bekommen")
             return
     except Exception as e:
         print("::warning title=mail::Duplikatpruefung fehlgeschlagen, sende trotzdem: " + str(e)[:150])
     try:
         from email.message import EmailMessage
         msg = EmailMessage()
-        msg["Subject"] = "Free Play Console: your app does not exist yet"
+        msg["Subject"] = subject
         msg["From"] = user
         msg["To"] = email
-        msg.set_content(
-            "Hello,\n\n"
-            f"the package name {package} doesn't exist in the Play Developer Console.\n\n"
-            "1. Accept the Google Play Console invitation email and create your app.\n"
-            f"2. Copy/paste the package name from the Google Play Developer Console to {FORM_URL}\n\n"
-            "This email is sent automatically. No Reply.\n")
+        msg.set_content(body)
         with smtplib.SMTP_SSL(os.environ.get("MAIL_HOST", "smtp.gmail.com"), 465, timeout=30) as s:
             s.login(user, pw)
             s.send_message(msg)
-        print(f"::notice title=mail::Hinweis an {email} gesendet")
+        print(f"::notice title=mail::Mail an {email} gesendet ({subject})")
     except Exception as e:
         print("::warning title=mail::nicht gesendet: " + str(e)[:200])
+
+
+def send_hint(email, package):
+    """Mail an die Person: App existiert noch nicht."""
+    _send(email, package, "Free Play Console: your app does not exist yet",
+          "Hello,\n\n"
+          f"the package name {package} doesn't exist in the Play Developer Console.\n\n"
+          "1. Accept the Google Play Console invitation email and create your app.\n"
+          f"2. Copy/paste the package name from the Google Play Developer Console to {FORM_URL}\n\n"
+          "This email is sent automatically. No Reply.\n")
+
+
+def send_access_mail(email, package):
+    """Mail an die Person: Zugriff auf die App ist eingerichtet (neu vergeben oder schon vorhanden)."""
+    _send(email, package, f"Free Play Console: you have access to {package}",
+          "Hello,\n\n"
+          f"you have access to the app {package} in the Play Developer Console.\n\n"
+          "This email is sent automatically. No Reply.\n")
 
 
 def cmd_claim(email, package):
@@ -198,11 +213,13 @@ def cmd_claim(email, package):
     h = [x.lower() for x in holders(package)]
     if email.lower() in h:
         print(f"::notice title=claim::{email} hat {package} schon")
+        send_access_mail(email, package)
         return
     if h:
         fail(f"{package}: es gibt bereits Rechteinhaber - keine Rechte vergeben")
     grant(email, package)
     print(f"::notice title=claim::FERTIG {email} -> {package}")
+    send_access_mail(email, package)
 
 
 def valid_email(x):
