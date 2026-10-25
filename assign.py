@@ -89,7 +89,8 @@ def app_exists(package):
     try:
         e = svc.edits().insert(packageName=package, body={}).execute()
     except HttpError as ex:
-        if ex.resp.status == 404:
+        # 404 = unbekanntes Paket; 403 = Paket gehoert nicht zu diesem Konto bzw. existiert nicht
+        if ex.resp.status in (403, 404):
             return False
         raise
     try:
