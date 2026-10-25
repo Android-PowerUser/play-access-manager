@@ -137,7 +137,7 @@ def send_hint(email, package):
         msg["To"] = email
         msg.set_content(
             "Hello,\n\n"
-            f"the package name {package} don't exists in the Play Developer Console.\n\n"
+            f"the package name {package} doesn't exist in the Play Developer Console.\n\n"
             "1. Accept the Google Play Console invitation email and create your app.\n"
             f"2. Copy/paste the package name from the Google Play Developer Console to {FORM_URL}\n\n"
             "This email is sent automatically. No Reply.\n")
