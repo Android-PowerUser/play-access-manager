@@ -195,8 +195,7 @@ def send_hint(email, package):
 def send_access_mail(email, package):
     """Mail an die Person: Zugriff auf die App ist eingerichtet (neu vergeben oder schon vorhanden)."""
     _send(email, package, f"Free Play Console: you have access to {package}",
-          "Hello,\n\n"
-          f"you have access to the app {package} in the Play Developer Console.\n\n"
+          f"You have access to the app {package} in the Play Developer Console. Please reload the Play Console Website\n\n"
           "This email is sent automatically. No Reply.\n")
 
 
