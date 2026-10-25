@@ -20,7 +20,7 @@ jobs:
           for name in ("MAIL_USER","MAIL_USERNAME"):
               u=os.environ.get(name,"")
               pw=os.environ.get("MAIL_PASSWORD","")
-              print(name, "gesetzt" if u else "LEER", "| Passwortlaenge:", len(pw))
+              print(f"::notice title=cfg {name}::{'gesetzt' if u else 'LEER'} pwlen={len(pw)}")
               if not u: continue
               try:
                   with smtplib.SMTP_SSL("smtp.gmail.com",465,timeout=30) as s:
@@ -30,7 +30,7 @@ jobs:
                       m["Subject"]=f"play-access-manager Mailtest ({name})"
                       m.set_content("Test erfolgreich.")
                       s.send_message(m)
-                  print(name,"=> LOGIN+SENDEN OK")
+                  print(f"::notice title=RESULT {name}::LOGIN+SENDEN OK")
               except Exception as e:
-                  print(name,"=> FEHLER:",repr(e)[:300])
+                  print(f"::error title=RESULT {name}::FEHLER {repr(e)[:250]}")
           PY
