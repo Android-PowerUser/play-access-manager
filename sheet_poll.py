@@ -15,45 +15,25 @@ def now():
     return datetime.now(timezone.utc)
 
 
-def einladen(email):
-    """Nur einladen (ohne Paketname), damit die Person ihre App anlegen kann."""
-    try:
-        assign.cmd_request(email, "")
-    except SystemExit:
-        pass
-    except HttpError as e:
-        print("::error title=poll::" + email + " " + assign.err_text(e))
-
-
-def process(email, pkg, invited=False):
-    """(erledigt, eingeladen). erledigt=False: spaeter nochmal versuchen (App existiert noch nicht)."""
+def process(email, pkg):
+    """True = erledigt, False = spaeter nochmal versuchen (App existiert noch nicht)."""
     if pkg and pkg not in assign.PROTECTED and not assign.app_exists(pkg):
-        if not invited:
-            einladen(email)
-        return False, True
+        return False
     try:
         assign.cmd_request(email, pkg)
     except SystemExit:
         pass  # fail() hat die Ablehnung schon als Annotation ausgegeben
     except HttpError as e:
         print("::error title=poll::" + email + " " + assign.err_text(e))
-    return True, True
+    return True
 
 
 def main():
     raw = urllib.request.urlopen(URL, timeout=30).read().decode("utf-8")
     rows = list(csv.reader(io.StringIO(raw)))
     head, data = rows[0], rows[1:]
-    low = [h.lower() for h in head]
-    # Paketspalte zuerst suchen: ihr Titel enthaelt auch "Gmail" ("... associated with your Gmail Account")
-    cp = next((i for i, h in enumerate(low) if "package name" in h), None)
-    ci = next((i for i, h in enumerate(low) if i != cp and ("gmail" in h or "e-mail" in h or "email" in h)), None)
-    kopf = " | ".join(h[:50] for h in head)
-    if ci is None:
-        print("::error title=sheet::keine E-Mail-Spalte gefunden: " + kopf)
-        sys.exit(1)
-    if cp is None:
-        print("::warning title=sheet::keine Paketname-Spalte gefunden, nur Einladungen moeglich: " + kopf)
+    ci = next(i for i, h in enumerate(head) if h.lower().startswith("enter your gmail"))
+    cp = next((i for i, h in enumerate(head) if h.lower().startswith("the package name")), None)
     try:
         state = json.load(open(STATE))
     except FileNotFoundError:
@@ -65,7 +45,7 @@ def main():
         if now() - datetime.fromisoformat(item["since"]) > KEEP:
             print(f"::notice title=sheet::{item['email']} {item['pkg']}: nach 48 h aufgegeben")
         else:
-            todo.append((item["email"], item["pkg"], item["since"], item.get("invited", False)))
+            todo.append((item["email"], item["pkg"], item["since"]))
     for r in data[state["done"]:]:
         email = (r[ci] if ci < len(r) else "").strip().lower()
         pkg = (r[cp] if cp is not None and cp < len(r) else "").strip()
@@ -73,16 +53,15 @@ def main():
             print(f"::notice title=sheet::ungueltige E-Mail uebersprungen: {email[:40]}")
             continue
         if pkg and not PKG.match(pkg):
-            print(f"::notice title=sheet::ungueltiger Paketname ({pkg[:60]}) - nur Einladung")
-            pkg = ""
-        todo.append((email, pkg, now().isoformat(), False))
+            print(f"::notice title=sheet::ungueltiger Paketname uebersprungen: {pkg[:60]}")
+            continue
+        todo.append((email, pkg, now().isoformat()))
 
     pending = []
-    for email, pkg, since, invited in todo:
-        done, invited = process(email, pkg, invited)
-        if not done:
+    for email, pkg, since in todo:
+        if not process(email, pkg):
             if not any(p["email"] == email and p["pkg"] == pkg for p in pending):
-                pending.append({"email": email, "pkg": pkg, "since": since, "invited": invited})
+                pending.append({"email": email, "pkg": pkg, "since": since})
     state = {"done": len(data), "pending": pending}
     json.dump(state, open(STATE, "w"), indent=2)
     print(f"::notice title=sheet::Zeilen: {len(data)}, bearbeitet: {len(todo)}, wartend: {len(pending)}")
