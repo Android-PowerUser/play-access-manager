@@ -61,8 +61,8 @@ def main():
             print(f"::notice title=sheet::ungueltige E-Mail uebersprungen: {email[:40]}")
             continue
         if pkg and not PKG.match(pkg):
-            print(f"::notice title=sheet::ungueltiger Paketname uebersprungen: {pkg[:60]}")
-            continue
+            print(f"::notice title=sheet::ungueltiger Paketname ({pkg[:60]}) - nur Einladung")
+            pkg = ""
         todo.append((email, pkg, now().isoformat()))
 
     pending = []
