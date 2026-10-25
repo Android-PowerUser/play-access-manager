@@ -15,17 +15,29 @@ def now():
     return datetime.now(timezone.utc)
 
 
-def process(email, pkg):
-    """True = erledigt, False = spaeter nochmal versuchen (App existiert noch nicht)."""
+def einladen(email):
+    """Nur einladen (ohne Paketname), damit die Person ihre App anlegen kann."""
+    try:
+        assign.cmd_request(email, "")
+    except SystemExit:
+        pass
+    except HttpError as e:
+        print("::error title=poll::" + email + " " + assign.err_text(e))
+
+
+def process(email, pkg, invited=False):
+    """(erledigt, eingeladen). erledigt=False: spaeter nochmal versuchen (App existiert noch nicht)."""
     if pkg and pkg not in assign.PROTECTED and not assign.app_exists(pkg):
-        return False
+        if not invited:
+            einladen(email)
+        return False, True
     try:
         assign.cmd_request(email, pkg)
     except SystemExit:
         pass  # fail() hat die Ablehnung schon als Annotation ausgegeben
     except HttpError as e:
         print("::error title=poll::" + email + " " + assign.err_text(e))
-    return True
+    return True, True
 
 
 def main():
@@ -53,7 +65,7 @@ def main():
         if now() - datetime.fromisoformat(item["since"]) > KEEP:
             print(f"::notice title=sheet::{item['email']} {item['pkg']}: nach 48 h aufgegeben")
         else:
-            todo.append((item["email"], item["pkg"], item["since"]))
+            todo.append((item["email"], item["pkg"], item["since"], item.get("invited", False)))
     for r in data[state["done"]:]:
         email = (r[ci] if ci < len(r) else "").strip().lower()
         pkg = (r[cp] if cp is not None and cp < len(r) else "").strip()
@@ -63,13 +75,14 @@ def main():
         if pkg and not PKG.match(pkg):
             print(f"::notice title=sheet::ungueltiger Paketname ({pkg[:60]}) - nur Einladung")
             pkg = ""
-        todo.append((email, pkg, now().isoformat()))
+        todo.append((email, pkg, now().isoformat(), False))
 
     pending = []
-    for email, pkg, since in todo:
-        if not process(email, pkg):
+    for email, pkg, since, invited in todo:
+        done, invited = process(email, pkg, invited)
+        if not done:
             if not any(p["email"] == email and p["pkg"] == pkg for p in pending):
-                pending.append({"email": email, "pkg": pkg, "since": since})
+                pending.append({"email": email, "pkg": pkg, "since": since, "invited": invited})
     state = {"done": len(data), "pending": pending}
     json.dump(state, open(STATE, "w"), indent=2)
     print(f"::notice title=sheet::Zeilen: {len(data)}, bearbeitet: {len(todo)}, wartend: {len(pending)}")
