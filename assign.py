@@ -201,7 +201,7 @@ def send_access_mail(email, package):
 
 def send_invited_mail(email):
     """Mail an die Person: schon eingeladen, aber kein (gueltiger) Paketname angegeben."""
-    _send(email, "", "Free Play Console: you are already invited",
+    _send(email, "", "Free Play Console: Enter a package name",
           "You are already invited:\n"
           "1. Create your app (if you haven't already done so)\n"
           f"2. Copy/paste the package name from the Google Play Developer Console to {FORM_URL}\n\n"
