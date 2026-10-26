@@ -167,9 +167,12 @@ def brevo_already_sent(api_key, email, tag, days=1):
                                  headers={"api-key": api_key, "accept": "application/json"})
     with urllib.request.urlopen(req, timeout=30) as r:
         data = json.load(r)
-    for e in data.get("events", []):
+    events = data.get("events", [])
+    # Mails, die Brevo nachtraeglich abgelehnt hat (z.B. Absender nicht verifiziert), zaehlen nicht als gesendet
+    failed = {e.get("messageId") for e in events if e.get("event") in ("error", "blocked", "invalid", "hardBounces")}
+    for e in events:
         t = e.get("tag")
-        if t == tag or (isinstance(t, list) and tag in t):
+        if (t == tag or (isinstance(t, list) and tag in t)) and e.get("messageId") not in failed:
             return True
     return False
 
