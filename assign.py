@@ -144,7 +144,7 @@ def already_sent(user, pw, email, package, subject=None, hours=24):
             _, msgs = m.uid("FETCH", uid, "(BODY.PEEK[TEXT] BODY.PEEK[HEADER.FIELDS (SUBJECT)])")
             raw = b" ".join(p[1] for p in msgs if isinstance(p, tuple)).decode("utf-8", "replace")
             raw = " ".join(raw.split())
-            if package in raw and (subject is None or " ".join(subject.split()) in raw):
+            if (not package or package in raw) and (subject is None or " ".join(subject.split()) in raw):
                 return True
         return False
     finally:
@@ -199,6 +199,15 @@ def send_access_mail(email, package):
           "This email is sent automatically. No Reply.\n")
 
 
+def send_invited_mail(email):
+    """Mail an die Person: schon eingeladen, aber kein (gueltiger) Paketname angegeben."""
+    _send(email, "", "Free Play Console: you are already invited",
+          "You are already invited:\n"
+          "1. Create your app (if you haven't already done so)\n"
+          f"2. Copy/paste the package name from the Google Play Developer Console to {FORM_URL}\n\n"
+          "This email is sent automatically. No Reply.\n")
+
+
 def cmd_claim(email, package):
     """Ordnet eine vom Nutzer angelegte App dem Nutzer zu - nur wenn noch niemand Rechte darauf hat."""
     if package in PROTECTED:
@@ -245,7 +254,8 @@ def cmd_request(email, package):
         invite(email)
         print(f"::notice title=invite::{email} eingeladen (Anlegen + Ansehen)")
     else:
-        print("::notice title=request::kein Paketname -> nichts zu tun")
+        print("::notice title=request::kein Paketname, schon eingeladen -> Hinweis-Mail")
+        send_invited_mail(email)
 
 
 def cmd_migrate(apply):
