@@ -154,10 +154,64 @@ def already_sent(user, pw, email, package, subject=None, hours=24):
             pass
 
 
-def _send(email, package, subject, body):
-    """Sendet eine automatische Mail. Gleiche Mail (Empfaenger+Paket+Betreff) wird innerhalb 24h nicht erneut gesendet.
-    Ohne MAIL_USER/MAIL_PASSWORD oder bei Fehlern wird nichts gesendet; der Lauf bricht deswegen nicht ab."""
+def _tag(kind, package):
+    import hashlib
+    return kind + ("-" + hashlib.sha1(package.encode()).hexdigest()[:10] if package else "")
+
+
+def brevo_already_sent(api_key, email, tag, days=1):
+    """True, wenn Brevo in den letzten `days` Tagen eine Mail mit diesem Tag an diese Adresse angenommen hat."""
+    import json, urllib.parse, urllib.request
+    q = urllib.parse.urlencode({"email": email, "days": days, "limit": 100})
+    req = urllib.request.Request("https://api.brevo.com/v3/smtp/statistics/events?" + q,
+                                 headers={"api-key": api_key, "accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        data = json.load(r)
+    for e in data.get("events", []):
+        t = e.get("tag")
+        if t == tag or (isinstance(t, list) and tag in t):
+            return True
+    return False
+
+
+def brevo_send(api_key, sender, email, subject, body, tag):
+    import json, urllib.request
+    payload = {"sender": {"name": "Free Play Console", "email": sender}, "to": [{"email": email}],
+               "subject": subject, "textContent": body, "tags": [tag]}
+    req = urllib.request.Request("https://api.brevo.com/v3/smtp/email", data=json.dumps(payload).encode(),
+                                 headers={"api-key": api_key, "content-type": "application/json",
+                                          "accept": "application/json"}, method="POST")
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return r.status
+
+
+def _send(email, package, subject, body, kind="mail"):
+    """Sendet eine automatische Mail. Gleiche Mail (Empfaenger+Paket+Art) wird innerhalb 24h nicht erneut gesendet.
+    Mit BREVO_API_KEY ueber Brevo (Absender BREVO_SENDER, sonst MAIL_USER), sonst/bei Brevo-Fehler ueber Gmail-SMTP.
+    Bei Fehlern wird nichts gesendet; der Lauf bricht deswegen nicht ab."""
+    import urllib.error
     user, pw = os.environ.get("MAIL_USER", ""), os.environ.get("MAIL_PASSWORD", "")
+    bkey = os.environ.get("BREVO_API_KEY", "")
+    if bkey:
+        sender = os.environ.get("BREVO_SENDER", "") or user
+        tag = _tag(kind, package)
+        if not sender:
+            print("::warning title=mail::Brevo: BREVO_SENDER fehlt")
+        else:
+            try:
+                if brevo_already_sent(bkey, email, tag):
+                    print(f"::notice title=mail::nicht erneut gesendet: {email} hat zu {package or kind} in den letzten 24h schon diese Mail bekommen")
+                    return
+            except Exception as e:
+                print("::warning title=mail::Duplikatpruefung (Brevo) fehlgeschlagen, sende trotzdem: " + str(e)[:150])
+            try:
+                brevo_send(bkey, sender, email, subject, body, tag)
+                print(f"::notice title=mail::Mail an {email} gesendet via Brevo ({subject})")
+                return
+            except urllib.error.HTTPError as e:
+                print("::warning title=mail::Brevo Fehler " + str(e.code) + ": " + e.read().decode("utf-8", "replace")[:200] + " - weiche auf Gmail aus")
+            except Exception as e:
+                print("::warning title=mail::Brevo Fehler: " + str(e)[:150] + " - weiche auf Gmail aus")
     if not user or not pw:
         print("::notice title=mail::nicht gesendet: MAIL_USER/MAIL_PASSWORD fehlen")
         return
@@ -189,14 +243,14 @@ def send_hint(email, package):
           f"the package name {package} doesn't exist in the Play Developer Console.\n\n"
           "1. Accept the Google Play Console invitation email and create your app.\n"
           f"2. Copy/paste the package name from the Google Play Developer Console to {FORM_URL}\n\n"
-          "This email is sent automatically. No Reply.\n")
+          "This email is sent automatically. No Reply.\n", kind="hint")
 
 
 def send_access_mail(email, package):
     """Mail an die Person: Zugriff auf die App ist eingerichtet (neu vergeben oder schon vorhanden)."""
     _send(email, package, f"Free Play Console: you have access to {package}",
           f"You have access to the app {package} in the Play Developer Console. Please reload the Play Console Website\n\n"
-          "This email is sent automatically. No Reply.\n")
+          "This email is sent automatically. No Reply.\n", kind="access")
 
 
 def send_invited_mail(email):
@@ -205,7 +259,7 @@ def send_invited_mail(email):
           "You are already invited:\n"
           "1. Create your app (if you haven't already done so)\n"
           f"2. Copy/paste the package name from the Google Play Developer Console to {FORM_URL}\n\n"
-          "This email is sent automatically. No Reply.\n")
+          "This email is sent automatically. No Reply.\n", kind="invited")
 
 
 def cmd_claim(email, package):
